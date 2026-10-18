@@ -21,11 +21,16 @@
 
 ## 快速开始（用户）
 
-### 方式一：一键启动（Windows）
+### 方式一：桌面图标启动（推荐，Windows）
 
-双击 `launcher.bat`——首次自动创建 venv 并安装依赖（清华 PyPI 镜像，失败自动回退官方源），启动后自动打开浏览器；再次双击 = 停止服务。
+1. **首次**：双击 `一键安装并创建桌面图标.bat` —— 自动创建 venv、安装依赖（清华 PyPI 镜像，失败回退官方源）、在桌面生成 **CC-Toolbox** 图标
+2. **日常**：双击桌面 **CC-Toolbox** 图标 —— 无黑窗静默启动并自动打开浏览器；**再次双击 = 停止服务**（弹窗提示状态）
 
-### 方式二：手动
+### 方式二：命令行风格（Windows）
+
+双击 `launcher.bat` —— 首次同样自动装依赖；启动过程在窗口内显示状态，服务以最小化窗口保活；再次双击 = 停止。
+
+### 方式三：手动
 
 ```bash
 python -m venv venv
@@ -96,7 +101,10 @@ cc-toolbox开源版/
 ├── paths_config.py            # paths_config.json 读写（三键：skill_paths / cli_paths / extra_mcp_project_dirs）
 ├── desc_cache.py              # 中文描述缓存引擎 + AI 描述（ai_descriptions.json 最高优先级）
 ├── start_server.py            # 后台启动助手（子进程 + 轮询地址 + 开浏览器）
-├── launcher.bat               # Windows 一键启动/停止（自动 venv + 依赖 + 开浏览器）
+├── launcher.bat               # Windows 命令行风格启动/停止（自动 venv + 依赖 + 开浏览器）
+├── 一键安装并创建桌面图标.bat  # 首次安装 + 生成桌面 CC-Toolbox 图标（推荐入口）
+├── launch_w.pyw               # 无窗口启动器（桌面图标目标：双击启动/停止 + 弹窗反馈）
+├── create_shortcut.ps1        # 创建桌面快捷方式（指向 pythonw + launch_w.pyw + 新图标）
 ├── create_shortcut.ps1        # 生成桌面快捷方式（可选）
 ├── generate_icon.py           # 维护者重新生成图标（需 Pillow；运行时不需要）
 ├── requirements.txt           # flask>=3.0、pytest
