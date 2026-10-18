@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}· {{ type_icons.get(tool_type, "📦") }} {{ tool_name }}{% endblock %}
+{% block content %}
+
+<div class="detail-page">
+    <!-- 面包屑导航 -->
+    <div class="detail-back-bar">
+        <a href="javascript:history.back()" class="detail-back-link">← 返回</a>
+        <span class="detail-breadcrumb">
+            <a href="/{{ plural_map.get(tool_type, tool_type+'s') }}">{{ type_labels.get(tool_type, tool_type) }}</a>
+            <span class="detail-breadcrumb-sep">/</span>
+            <span>{{ tool_name }}</span>
+        </span>
+    </div>
+
+    <!-- 详情内容 -->
+    <div id="detailContent" class="detail-content" data-type="{{ tool_type }}" data-name="{{ tool_name }}">
+        <div class="loading">加载中...</div>
+    </div>
+</div>
+
+{% endblock %}

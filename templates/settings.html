@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}· 路径设置{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h2>⚙️ 路径设置</h2>
+        <p>自定义扫描路径与用户数据文件（paths_config.json 可交给 AI 直接编辑）</p>
+    </div>
+    <div class="header-actions">
+        <button class="btn" data-action="refresh-settings">🔄 刷新</button>
+    </div>
+</div>
+
+<div id="settingsPage" data-page="settings">
+    <div class="category-grid">
+        <!-- Skill 扫描目录 -->
+        <div class="category-card settings-card">
+            <div class="category-header" style="cursor:default;">
+                <div class="category-header-left">
+                    <h3>📦 Skill 扫描目录</h3>
+                    <span class="settings-group-tag">skill_paths</span>
+                </div>
+            </div>
+            <div class="category-body">
+                <div class="path-list" data-group="skill_paths">
+                    <div class="loading">加载中...</div>
+                </div>
+                <div class="path-add-row">
+                    <input type="text" placeholder="输入目录绝对路径，如 E:\my\skills" data-group-input="skill_paths" />
+                    <button class="btn" data-action="path-add" data-group="skill_paths">＋ 添加</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CLI 扫描目录 -->
+        <div class="category-card settings-card">
+            <div class="category-header" style="cursor:default;">
+                <div class="category-header-left">
+                    <h3>🖥️ CLI 扫描目录</h3>
+                    <span class="settings-group-tag">cli_paths</span>
+                </div>
+            </div>
+            <div class="category-body">
+                <div class="path-list" data-group="cli_paths">
+                    <div class="loading">加载中...</div>
+                </div>
+                <div class="path-add-row">
+                    <input type="text" placeholder="输入目录绝对路径，如 D:\code work\cli" data-group-input="cli_paths" />
+                    <button class="btn" data-action="path-add" data-group="cli_paths">＋ 添加</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MCP 额外项目目录 -->
+        <div class="category-card settings-card">
+            <div class="category-header" style="cursor:default;">
+                <div class="category-header-left">
+                    <h3>🔌 MCP 额外项目目录</h3>
+                    <span class="settings-group-tag">extra_mcp_project_dirs</span>
+                </div>
+            </div>
+            <div class="category-body">
+                <div class="path-list" data-group="extra_mcp_project_dirs">
+                    <div class="loading">加载中...</div>
+                </div>
+                <div class="path-add-row">
+                    <input type="text" placeholder="输入项目根目录绝对路径，如 E:\my\project" data-group-input="extra_mcp_project_dirs" />
+                    <button class="btn" data-action="path-add" data-group="extra_mcp_project_dirs">＋ 添加</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 用户数据文件（路径由后端注入的 paths_dir 拼出，供 /api/paths/open 白名单校验） -->
+        <div class="category-card settings-card">
+            <div class="category-header" style="cursor:default;">
+                <div class="category-header-left">
+                    <h3>📁 用户数据文件</h3>
+                    <span class="settings-group-tag">user-data</span>
+                </div>
+            </div>
+            <div class="category-body">
+                <div class="path-list">
+                    <div class="path-row">
+                        <span class="path-text">{{ paths_dir }}\paths_config.json</span>
+                        <button class="btn btn-sm" data-action="open-file" data-path="{{ paths_dir }}\paths_config.json">📂 打开</button>
+                    </div>
+                    <div class="path-row">
+                        <span class="path-text">{{ paths_dir }}\ai_descriptions.json</span>
+                        <button class="btn btn-sm" data-action="open-file" data-path="{{ paths_dir }}\ai_descriptions.json">📂 打开</button>
+                        <button class="btn btn-sm btn-danger" data-action="ai-desc-reset">♻️ 恢复示例</button>
+                    </div>
+                </div>
+                <p class="settings-hint">ai_descriptions.json 供 AI 填写工具描述，格式见 ai_descriptions.example.json；paths_config.json 可直接用编辑器修改</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

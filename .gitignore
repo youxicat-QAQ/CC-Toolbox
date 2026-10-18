@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+venv/
+.pytest_cache/
+server.log
+server_addr.txt
+.launcher.pid
+desc_cache.json
+hook_disabled.json
+paths_config.json
+ai_descriptions.json

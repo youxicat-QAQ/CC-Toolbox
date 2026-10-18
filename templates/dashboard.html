@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}· 仪表盘{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>📊 全景仪表盘</h2>
+        <p>所有 Claude Code 工具一览</p>
+    </div>
+    <div class="header-actions">
+        <button class="btn" data-action="export" data-format="json">📥 导出 JSON</button>
+        <button class="btn" data-action="export" data-format="markdown">📥 导出 Markdown</button>
+        <button class="btn" onclick="window.location.href='/docs'">📋 工具文档</button>
+        <button class="btn" data-action="refresh-all">🔄 刷新</button>
+    </div>
+</div>
+
+<!-- Hero 指挥区 -->
+<section class="hero-panel">
+    <div class="hero-left">
+        <div class="hero-status"><span class="status-dot"></span><span>SYSTEM ONLINE</span></div>
+        <div class="hero-total" id="heroTotal">-</div>
+        <div class="hero-sub">TOTAL TOOLS · 工具总数</div>
+    </div>
+    <div class="hero-meta">
+        <div class="hero-meta-item"><span class="hm-label">SYNC</span><span class="hm-value" id="syncTime">--:--:--</span></div>
+        <div class="hero-meta-item"><span class="hm-label">TYPES</span><span class="hm-value" id="typeCount">6</span></div>
+    </div>
+</section>
+
+<!-- 统计卡片 -->
+<div class="stats-grid" id="statsGrid">
+    <div class="stat-card" data-type="skill">
+        <span class="stat-icon">📦</span>
+        <span class="stat-count">-</span>
+        <span class="stat-label">技能<small>SKILLS</small></span>
+        <div class="stat-bar"><div class="stat-bar-fill"></div></div>
+    </div>
+    <div class="stat-card" data-type="mcp">
+        <span class="stat-icon">🔌</span>
+        <span class="stat-count">-</span>
+        <span class="stat-label">MCP 服务<small>MCP</small></span>
+        <div class="stat-bar"><div class="stat-bar-fill"></div></div>
+    </div>
+    <div class="stat-card" data-type="cli">
+        <span class="stat-icon">🖥️</span>
+        <span class="stat-count">-</span>
+        <span class="stat-label">命令行<small>CLI</small></span>
+        <div class="stat-bar"><div class="stat-bar-fill"></div></div>
+    </div>
+    <div class="stat-card" data-type="hook">
+        <span class="stat-icon">⚡</span>
+        <span class="stat-count">-</span>
+        <span class="stat-label">钩子<small>HOOKS</small></span>
+        <div class="stat-bar"><div class="stat-bar-fill"></div></div>
+    </div>
+    <div class="stat-card" data-type="plugin">
+        <span class="stat-icon">🔧</span>
+        <span class="stat-count">-</span>
+        <span class="stat-label">插件<small>PLUGINS</small></span>
+        <div class="stat-bar"><div class="stat-bar-fill"></div></div>
+    </div>
+    <div class="stat-card" data-type="command">
+        <span class="stat-icon">📝</span>
+        <span class="stat-count">-</span>
+        <span class="stat-label">命令<small>COMMANDS</small></span>
+        <div class="stat-bar"><div class="stat-bar-fill"></div></div>
+    </div>
+</div>
+
+<!-- 分类预览网格 -->
+<div class="category-grid">
+    {% for item in [
+        ("skills", "📦", "技能", "skill"),
+        ("mcp", "🔌", "MCP 服务", "mcp"),
+        ("cli", "🖥️", "命令行工具", "cli"),
+        ("hooks", "⚡", "钩子", "hook"),
+        ("plugins", "🔧", "插件", "plugin"),
+        ("commands", "📝", "命令", "command"),
+    ] %}
+    <div class="category-card">
+        <a href="/{{ item[0] }}" class="category-header" style="text-decoration:none;color:inherit;">
+            <div class="category-header-left">
+                <span class="category-dot {{ item[3] }}"></span>
+                <h3>{{ item[1] }} {{ item[2] }}</h3>
+            </div>
+            <span class="category-more">查看全部 →</span>
+        </a>
+        <div class="category-body" id="preview-{{ item[0] }}">
+            <div class="loading">加载中...</div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- 使用统计 -->
+<div class="usage-section">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <h3 style="font-size:15px;font-weight:600">📊 常用工具排行</h3>
+        <button class="btn" data-action="refresh-usage">🔄 刷新统计</button>
+    </div>
+    <div id="usageStats" class="loading">加载中...</div>
+</div>
+{% endblock %}

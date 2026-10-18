@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}· 全局工具文档{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>📋 全局工具文档</h2>
+        <p id="docsTimestamp">加载中...</p>
+    </div>
+    <div class="header-actions">
+        <button class="btn" data-action="export" data-format="json">📥 导出 JSON</button>
+        <button class="btn" data-action="export" data-format="markdown">📥 导出 Markdown</button>
+        <button class="btn" data-action="refresh-docs">🔄 更新文档</button>
+    </div>
+</div>
+
+<div id="docsContent">
+    <div class="loading">加载中...</div>
+</div>
+{% endblock %}

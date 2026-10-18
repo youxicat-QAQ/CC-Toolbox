@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}· {{ type_labels.get(tool_type, tool_type) }}{% endblock %}
+{% block content %}
+{% set api_map = {"skills":"/api/skills","mcp":"/api/mcp","cli":"/api/cli","hooks":"/api/hooks","plugins":"/api/plugins","commands":"/api/commands"} %}
+
+<div class="page-header">
+    <div>
+        <h2>{{ type_icons.get(tool_type, "📦") }} {{ type_labels.get(tool_type, tool_type) }}</h2>
+        <p>当前分类下的所有工具</p>
+    </div>
+    <div class="header-actions">
+        <div class="search-input-wrap">
+            <span class="si-icon">🔍</span>
+            <input type="text" id="listSearch" placeholder="在当前列表中搜索..." class="search-input" />
+        </div>
+        <button class="btn" onclick="window.location.href='/docs'">📋 工具文档</button>
+        <button class="btn" data-action="refresh-list">🔄 刷新</button>
+    </div>
+</div>
+
+<div class="tool-grid" id="toolGrid" data-api="{{ api_map.get(tool_type) }}" data-type="{{ tool_type }}">
+    <div class="loading">加载中...</div>
+</div>
+{% endblock %}

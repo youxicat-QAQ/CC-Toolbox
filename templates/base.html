@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CC-Toolbox{% block title %} · 工具箱管理器{% endblock %}</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="icon" type="image/png" sizes="256x256" href="/static/icon.png">
+    <link rel="icon" type="image/png" sizes="64x64" href="/static/icon-64.png">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="layout">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1 class="logo">
+                    <span class="logo-icon">⚙</span>
+                    <span>CC-Toolbox</span>
+                </h1>
+            </div>
+            <nav class="sidebar-nav" id="sidebarNav">
+                {# 由 app.py 各页面路由注入 active；404 错误页未注入时回退为空串（#38） #}
+                {% set active = active|default("") %}
+                <a href="/" class="nav-item {% if active == 'dashboard' %}active{% endif %}">
+                    <span class="nav-icon">📊</span><span>总览</span>
+                    <span class="nav-count" id="navTotal">-</span>
+                </a>
+                <a href="/skills" class="nav-item {% if active == 'skills' %}active{% endif %}">
+                    <span class="nav-icon">📦</span><span>技能</span>
+                    <span class="nav-count" id="navSkill">-</span>
+                </a>
+                <a href="/mcp" class="nav-item {% if active == 'mcp' %}active{% endif %}">
+                    <span class="nav-icon">🔌</span><span>MCP 服务</span>
+                    <span class="nav-count" id="navMcp">-</span>
+                </a>
+                <a href="/cli" class="nav-item {% if active == 'cli' %}active{% endif %}">
+                    <span class="nav-icon">🖥️</span><span>命令行</span>
+                    <span class="nav-count" id="navCli">-</span>
+                </a>
+                <a href="/hooks" class="nav-item {% if active == 'hooks' %}active{% endif %}">
+                    <span class="nav-icon">⚡</span><span>钩子</span>
+                    <span class="nav-count" id="navHook">-</span>
+                </a>
+                <a href="/plugins" class="nav-item {% if active == 'plugins' %}active{% endif %}">
+                    <span class="nav-icon">🔧</span><span>插件</span>
+                    <span class="nav-count" id="navPlugin">-</span>
+                </a>
+                <a href="/commands" class="nav-item {% if active == 'commands' %}active{% endif %}">
+                    <span class="nav-icon">📝</span><span>命令</span>
+                    <span class="nav-count" id="navCommand">-</span>
+                </a>
+                <div style="border-top:1px solid rgba(255,255,255,0.06);margin:6px 14px;"></div>
+                <a href="/settings" class="nav-item {% if active == 'settings' %}active{% endif %}">
+                    <span class="nav-icon">⚙️</span><span>路径设置</span>
+                </a>
+                <a href="/search" class="nav-item {% if active == 'search' %}active{% endif %}">
+                    <span class="nav-icon">🔍</span><span>搜索</span>
+                </a>
+                <a href="/docs" class="nav-item {% if active == 'docs' %}active{% endif %}">
+                    <span class="nav-icon">📋</span><span>文档</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="search-wrap">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="globalSearch" class="global-search-input" placeholder="搜索所有工具..." />
+                </div>
+            </div>
+        </aside>
+
+        <!-- 主内容 -->
+        <main class="main">
+            <div class="mobile-search">
+                <input type="text" class="global-search-input" placeholder="搜索所有工具..." />
+            </div>
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

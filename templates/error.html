@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %} — 出错了{% endblock %}
+{% block content %}
+<div class="error-page">
+    <div class="error-icon">⚠️</div>
+    <h2>出错了</h2>
+    <p>{{ message }}</p>
+    <a href="/" class="btn-back">返回首页</a>
+</div>
+{% endblock %}
