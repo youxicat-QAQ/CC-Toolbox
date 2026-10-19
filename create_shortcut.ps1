@@ -7,7 +7,7 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $desktop = [Environment]::GetFolderPath('Desktop')
 $venvPythonw = Join-Path $scriptDir 'venv\Scripts\pythonw.exe'
 $launcherPy = Join-Path $scriptDir 'launch_w.pyw'
-$iconFile = Join-Path $scriptDir 'static\favicon.ico'
+$iconFile = Join-Path $scriptDir 'static\app_icon.ico'
 
 if (-not (Test-Path $venvPythonw)) {
     Write-Output "[ERROR] venv not found: $venvPythonw"

@@ -24,7 +24,7 @@
 ### 方式一：桌面图标启动（推荐，Windows）
 
 1. **首次**：双击 `一键安装并创建桌面图标.bat` —— 自动创建 venv、安装依赖（清华 PyPI 镜像，失败回退官方源）、在桌面生成 **CC-Toolbox** 图标
-2. **日常**：双击桌面 **CC-Toolbox** 图标 —— 无黑窗静默启动并自动打开浏览器；**再次双击 = 停止服务**（弹窗提示状态）
+2. **日常**：双击桌面 **CC-Toolbox** 图标 —— 立即弹出**启动等待窗口**（跑马灯 + 已等待秒数，首次约 10~20 秒），服务就绪后自动关窗并打开浏览器；**再次双击 = 停止服务**（弹窗提示状态）
 
 ### 方式二：命令行风格（Windows）
 
@@ -56,6 +56,43 @@ python app.py
 5. 启动：`python app.py`（Windows 也可双击 `launcher.bat`）；等待项目目录出现 `server_addr.txt`（最多 20 秒），读取其中 URL，验证 `GET /api/summary` 返回 200
 6. 可选测试：`python -m pytest tests/ -q` 应全部通过（当前 72 个用例）
 7. 向用户报告访问 URL 与已配置的路径 / 描述数量
+
+## 主运行流程（给用户与 AI Agent 的系统心智模型）
+
+理解这条链路有助于排障与二次开发：
+
+```
+双击桌面图标（或 launcher.bat）
+   ↓
+launch_w.pyw（前台接待员，pythonw 无窗口运行）
+   ├─ 立即弹出等待窗口（跑马灯 + 已等待秒数）🆕
+   ├─ 后台启动 venv\Scripts\python.exe app.py（真服务，输出写 server.log）
+   ├─ 轮询 server_addr.txt（服务启动后写入实际地址）
+   └─ 就绪 → 自动关等待窗 → 打开浏览器 → MessageBox 报告地址
+        （25 秒未就绪 → 等待窗显示超时排查指引）
+   ↓
+Flask 服务（app.py）
+   ├─ 探测空闲端口（8765 起，被占自动 +1；可用 CC_TOOLBOX_PORT 指定）
+   ├─ 写 server_addr.txt（实际 URL）与 .launcher.pid（进程号）
+   └─ 扫描本机数据源：~/.claude/ 各配置、paths_config.json 自定义目录
+   ↓
+浏览器页面（深空数据大屏）
+   └─ 页面 JS 通过 /api/* 向服务要数据并渲染
+        （列表数据带 120 秒缓存，页面「刷新」按钮强制重扫）
+```
+
+停止：再次双击图标 → `launch_w.pyw` 读 `.launcher.pid` 确认进程存活 → taskkill 停止 → 弹窗提示。
+
+**为什么首次启动要十几秒**：Python 解释器加载 + Flask 初始化 + 全盘扫描工具目录（系统 PATH 就有上百个目录）+ 首次无缓存。等待窗口的作用就是把这段"黑盒时间"可视化。二次启动因描述缓存已存在会明显更快。
+
+## 启动组件速查（launcher.bat 与 venv 是什么）
+
+| 组件 | 一句话说明 |
+|---|---|
+| **桌面图标** → `launch_w.pyw` | 日常主入口：无黑窗、有等待窗口、双击切换启停 |
+| **launcher.bat** | 命令行风格备用入口：黑窗口显示每步详细输出，适合排障；首次会自动建 venv 装依赖，之后每次**不会**再联网下载（发现 venv 与依赖已存在即跳过安装） |
+| **venv/** | 项目专属的隔离 Python 环境：内置一份完整 Python 解释器副本 + pip + Flask 等依赖。体积大（几十~百余 MB）属正常；不联网、不上传；可整个删除，双击 launcher.bat 会自动重建。隔离的意义是不污染系统 Python，且整目录拷贝到新机器删掉 venv 重建即可 |
+| **一键安装并创建桌面图标.bat** | 仅首次使用：建 venv → 装依赖（清华镜像，失败回退官方源）→ 生成桌面快捷方式 |
 
 ## 端口与多开
 
@@ -103,7 +140,7 @@ cc-toolbox开源版/
 ├── start_server.py            # 后台启动助手（子进程 + 轮询地址 + 开浏览器）
 ├── launcher.bat               # Windows 命令行风格启动/停止（自动 venv + 依赖 + 开浏览器）
 ├── 一键安装并创建桌面图标.bat  # 首次安装 + 生成桌面 CC-Toolbox 图标（推荐入口）
-├── launch_w.pyw               # 无窗口启动器（桌面图标目标：双击启动/停止 + 弹窗反馈）
+├── launch_w.pyw               # 无窗口启动器（桌面图标目标：等待窗口 + 双击切换启停 + 弹窗反馈）
 ├── create_shortcut.ps1        # 创建桌面快捷方式（指向 pythonw + launch_w.pyw + 新图标）
 ├── create_shortcut.ps1        # 生成桌面快捷方式（可选）
 ├── generate_icon.py           # 维护者重新生成图标（需 Pillow；运行时不需要）
@@ -120,17 +157,21 @@ cc-toolbox开源版/
 │   ├── hook_scanner.py   plugin_scanner.py  command_scanner.py
 │   └── stats_scanner.py
 ├── templates/                 # Jinja2 模板：base/dashboard/list/detail/docs/search/settings/error
-├── static/                    # css/style.css（深空主题）、js/app.js、图标
+├── static/                    # css/style.css（深空主题）、js/app.js、图标（app_icon.ico 为快捷方式图标）
 └── tests/                     # pytest 用例（72 个）
 ```
 
 ## FAQ
 
+- **双击 launcher.bat 每次都会下载东西吗** → 不会。只有首次（或 venv 被删除）才联网装依赖，之后直接跳过安装启动服务
+- **venv 文件夹为什么那么大** → 它是项目专属的隔离 Python 环境：含完整解释器副本 + pip + Flask 及依赖，几十~百余 MB 属正常；可删除，launcher.bat 会自动重建（详见「启动组件速查」）
+- **双击图标后浏览器很久才打开** → 首次启动需扫描工具目录约 10~20 秒，现在有等待窗口显示进度；二次启动明显更快。超时 25 秒会提示查 server.log
+- **桌面图标显示的还是旧图标** → Windows 按文件路径缓存图标。处理：重新运行 `powershell -ExecutionPolicy Bypass -File create_shortcut.ps1` 重建快捷方式（其 IconLocation 指向 `static\app_icon.ico`，换名文件可绕开缓存）；仍无效则桌面按 F5 刷新，或任务管理器重启 Windows 资源管理器
 - **端口被占 / 想换端口** → 见「端口与多开」
 - **工具描述不准** → 让 AI 填 `ai_descriptions.json`；文档页「更新描述」可合并进缓存
 - **paths / ai 文件删了会崩吗** → 不会，自动回退空配置 / 原描述链
 - **换电脑** → 整目录拷走即可（venv 可删重建）；`paths_config.json` 是本机路径，需按需调整
-- **改图标** → 维护者：`pip install pillow` 后 `python generate_icon.py`（运行时不需要 Pillow）
+- **改图标** → 维护者：`pip install pillow` 后 `python generate_icon.py`（运行时不需要 Pillow）；或直接替换 `static/app_icon.ico` / `favicon.ico` / `icon.png`（ico 换文件名可绕 Windows 图标缓存）
 - **数据隐私** → 完全本地运行，不发送任何数据；`desc_cache.json` 等用户数据不入库
 
 ## License

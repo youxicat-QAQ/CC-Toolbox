@@ -144,7 +144,7 @@ def _show_waiting_window() -> None:
     root.resizable(False, False)
     root.attributes("-topmost", True)
     try:
-        root.iconbitmap(str(BASE / "static" / "favicon.ico"))
+        root.iconbitmap(str(BASE / "static" / "app_icon.ico"))
     except tk.TclError:
         pass
     # 屏幕居中
