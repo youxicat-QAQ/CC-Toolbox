@@ -162,7 +162,7 @@ cc-toolbox开源版/
 │   └── stats_scanner.py
 ├── templates/                 # Jinja2 模板：base/dashboard/list/detail/docs/search/settings/error
 ├── static/                    # css/style.css（深空主题）、js/app.js、图标（app_icon.ico 为快捷方式图标）
-└── tests/                     # pytest 用例（72 个）
+└── tests/                     # pytest 用例（106 个）
 ```
 
 ## FAQ

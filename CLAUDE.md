@@ -22,7 +22,7 @@ python app.py --host 127.0.0.1 --port 9000
 python -m pytest tests/ -q
 ```
 
-Debug 模式默认关闭。测试在 `tests/`（72 个用例）；无 lint 配置。依赖装进项目本地 `venv/`（`python -m venv venv` + `pip install -r requirements.txt`）。
+Debug 模式默认关闭。测试在 `tests/`（106 个用例）；无 lint 配置。依赖装进项目本地 `venv/`（`python -m venv venv` + `pip install -r requirements.txt`）。
 
 ## 项目架构
 
