@@ -491,6 +491,15 @@ def api_paths_open():
             import subprocess
             opener = "open" if sys.platform == "darwin" else "xdg-open"
             subprocess.Popen([opener, str(target)])
+    except OSError:
+        # Windows 对无文件关联的扩展名（精简系统常见 .json 无默认程序）
+        # 报 CO_E_APP_NOT_FOUND（-2147221003）：文件用记事本兜底，目录回退 explorer
+        import subprocess
+        try:
+            fallback = "notepad" if target.is_file() else "explorer"
+            subprocess.Popen([fallback, str(target)], creationflags=0x08000000)  # CREATE_NO_WINDOW
+        except Exception as e2:
+            return jsonify({"success": False, "error": f"无法打开：{e2}"}), 500
     except Exception as e:
         return jsonify({"success": False, "error": f"打开失败：{e}"}), 500
     return jsonify({"success": True})

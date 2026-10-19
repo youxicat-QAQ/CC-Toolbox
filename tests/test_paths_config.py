@@ -113,3 +113,35 @@ def test_reset_ai_desc_missing_example(client, fake_env, monkeypatch, tmp_path):
     r = client.post("/api/paths/reset-ai-desc")
     assert r.status_code == 404
     assert r.get_json()["success"] is False
+
+
+def test_open_file_falls_back_to_notepad_when_no_association(client, fake_env, monkeypatch):
+    """Windows 对无文件关联的扩展名 startfile 抛 OSError（CO_E_APP_NOT_FOUND）时，
+    应降级用 notepad 打开文件而非 500（回归：设置页「打开」按钮报找不到应用程序）。"""
+    import os as _os
+    import paths_config as _pc
+
+    target = _pc.PATHS_CONFIG_FILE
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("{}", encoding="utf-8")
+
+    calls = []
+
+    def boom(path):
+        raise OSError(-2147221003, "找不到应用程序")
+
+    monkeypatch.setattr(_os, "startfile", boom)
+    import subprocess as _sp
+    real_popen = _sp.Popen
+
+    def spy(cmd, *a, **kw):
+        calls.append(cmd)
+        class _P:  # noqa
+            pass
+        return _P()
+
+    monkeypatch.setattr(_sp, "Popen", spy)
+
+    resp = client.post("/api/paths/open", json={"path": str(target)})
+    assert resp.status_code == 200
+    assert calls and "notepad" in calls[0][0].lower()
