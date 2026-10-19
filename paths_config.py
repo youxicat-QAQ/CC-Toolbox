@@ -49,6 +49,16 @@ def _load() -> dict:
     for key in _FIELDS:
         if not isinstance(data.get(key), list):
             data[key] = []
+    # 列表元素级过滤：用户按 README 手改可能混入 null/数字/空串，
+    # 这些会让下游 Path(item) 抛 TypeError 且无人捕获 → 全站 500、设置页锁死
+    for key in _FIELDS:
+        raw_list = data[key]
+        cleaned = [x for x in raw_list
+                   if isinstance(x, str) and x.strip()]
+        if len(cleaned) != len(raw_list):
+            logger.warning("paths_config.json 的 %s 含非字符串/空元素，已过滤：%r",
+                           key, raw_list)
+            data[key] = cleaned
     return data
 
 
@@ -83,6 +93,10 @@ def _merge(defaults: List[Path], custom: List[str]) -> List[Path]:
     result: List[Path] = []
     seen: set = set()
     for item in list(defaults) + list(custom):
+        # 防御性跳过非字符串坏数据（默认项是 Path，用户项应为 str；
+        # 混入 null/数字时 Path() 会抛 TypeError → 全站 500）
+        if not isinstance(item, (str, Path)):
+            continue
         p = Path(item).expanduser()
         key = str(p)
         if key in seen:

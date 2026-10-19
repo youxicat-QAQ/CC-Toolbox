@@ -20,6 +20,18 @@ def _version_sort_key(v: str):
     return tuple(int(x) for x in v.split(".") if x.isdigit())
 
 
+def _norm_description(meta: dict) -> str:
+    """把 plugin.json 的 description 收敛为 str。
+
+    description 可能是 null（→ ""）或数字等非 str（→ str() 转文本）；
+    不收敛会让 api_search 的 .lower()、desc_cache 的中文判断抛异常 → 全线 500。
+    """
+    desc = meta.get("description") or ""
+    if not isinstance(desc, str):
+        desc = str(desc)
+    return desc
+
+
 def _read_plugin_json(plugin_dir: Path) -> Optional[dict]:
     """读取插件目录下的 plugin.json（可能在 .claude-plugin/ 里）。"""
     for candidate in [plugin_dir / ".claude-plugin" / "plugin.json", plugin_dir / "plugin.json"]:
@@ -132,7 +144,7 @@ def scan_all() -> List[dict]:
         plugins.append({
             "name": name,
             "version": info["version"] or meta.get("version", ""),
-            "description": meta.get("description", ""),
+            "description": _norm_description(meta),
             "author": meta.get("author", ""),
             "source": info["source"],
             "skills": subs["skills"],
@@ -189,7 +201,7 @@ def scan_all() -> List[dict]:
                 plugins.append({
                     "name": display_name,
                     "version": meta.get("version", ""),
-                    "description": meta.get("description", ""),
+                    "description": _norm_description(meta),
                     "author": meta.get("author", ""),
                     "source": "",
                     "skills": subs["skills"],

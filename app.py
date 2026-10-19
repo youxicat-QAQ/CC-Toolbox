@@ -22,6 +22,33 @@ from scanners.stats_scanner import get_usage_stats
 
 app = Flask(__name__)
 
+
+# ── CSRF 防护与安全响应头 ─────────────────────
+
+@app.before_request
+def _csrf_guard():
+    """改状态的 POST 接口拒绝跨站请求：有 Origin/Referer 时校验 host 一致；
+    无 Origin/Referer（curl/本机工具）放行。附带设置安全响应头。"""
+    if request.method == "POST":
+        origin = request.headers.get("Origin") or request.headers.get("Referer")
+        if origin:
+            from urllib.parse import urlparse
+            host = urlparse(origin).netloc
+            if host and host != request.host:
+                return jsonify({"success": False, "error": "跨站请求被拒绝"}), 403
+    return None
+
+
+@app.after_request
+def _set_security_headers(response):
+    """所有响应统一附加安全头；JSON 响应额外加 Referrer-Policy。"""
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    if response.mimetype == "application/json":
+        response.headers.setdefault("Referrer-Policy", "same-origin")
+    return response
+
+
 # ── 页面路由 ──────────────────────────────────
 
 @app.route("/")
@@ -129,7 +156,7 @@ def api_summary():
 def api_skills():
     force = request.args.get("refresh") == "1"
     skills = scan_skills(force)
-    plugin_idx = _build_plugin_index()
+    plugin_idx = _build_plugin_index(force)
     # 构造新 dict，避免原地写扫描器共享缓存污染后续响应（#6）
     result = []
     for s in skills:
@@ -168,9 +195,16 @@ def api_commands():
 
 @app.route("/api/search")
 def api_search():
+    """搜索接口。响应为对象：{results, truncated, total_matched}。
+
+    - results：跨类公平轮转后截到 limit 的结果列表
+    - truncated：任一类收集达 per_cap，或收集总数超过 limit
+    - total_matched：各类匹配数之和（未做 limit 截断前的估计）；某类被打满
+      per_cap 时该类按 per_cap 计，故为下限值（配合 truncated 读作「约 N 条」）
+    """
     q = request.args.get("q", "").strip().lower()
     if not q:
-        return jsonify([])
+        return jsonify({"results": [], "truncated": False, "total_matched": 0})
 
     # 结果上限：默认 50、封顶 200（#22）
     limit = request.args.get("limit", default=50, type=int)
@@ -178,25 +212,59 @@ def api_search():
         limit = 50
     limit = min(limit, 200)
 
+    # 每类独立配额：先按类收集、每类最多 per_cap 条，全部类扫完后再跨类分 limit。
+    # 否则按扫描器顺序累加到 limit 即返回，CLI（200+ 个）会把 hooks/plugins/commands 全挤掉（#2）
+    per_cap = max(10, limit)
     force = request.args.get("refresh") == "1"
-    results = []
+    buckets = []     # 各类匹配结果（类内保持扫描器顺序）
+    cap_hit = False  # 是否有任一类收集达 per_cap（该类真实匹配数 ≥ per_cap）
     for scanner, ttype in [
         (scan_skills, "skill"), (scan_mcp_servers, "mcp"),
         (scan_cli_tools, "cli"), (scan_hooks, "hook"),
         (scan_plugins, "plugin"), (scan_commands, "command"),
     ]:
+        bucket = []
         for item in scanner(force):
+            # 纵深防御：扫描器若漏网非 str 的 name/description（null、数字），
+            # 先收敛为 str 再匹配/传 desc_cache，否则 .lower() 或 _has_chinese 会炸 → 搜索 500
+            name = str(item.get("name") or "")
+            desc = str(item.get("description") or "")
             # 名称 / 原始描述 / desc_cache 中文描述 三路匹配（desc_cache 为内存缓存，stat 命中，可接受）
-            cn_desc = get_description(item.get("name", ""), ttype,
-                                      item.get("description", ""))
-            if (q in item.get("name", "").lower()
-                    or q in item.get("description", "").lower()
+            cn_desc = get_description(name, ttype, desc)
+            if (q in name.lower()
+                    or q in desc.lower()
                     or q in (cn_desc or "").lower()):
-                results.append({**item, "type": ttype})
-                if len(results) >= limit:
-                    return jsonify(results)
+                bucket.append({**item, "type": ttype})
+                if len(bucket) >= per_cap:
+                    cap_hit = True
+                    break
+        if bucket:
+            buckets.append(bucket)
 
-    return jsonify(results)
+    total_matched = sum(len(b) for b in buckets)
+    truncated = cap_hit or total_matched > limit
+
+    # 跨类轮转展平再截到 limit：每类轮流取，保证小类不被前面的大类整体挤出
+    # （直接 flat[:limit] 会复现「先到先得」的整类丢失问题）
+    results = []
+    i = 0
+    while len(results) < limit:
+        progressed = False
+        for bucket in buckets:
+            if i < len(bucket):
+                results.append(bucket[i])
+                progressed = True
+                if len(results) >= limit:
+                    break
+        if not progressed:
+            break
+        i += 1
+
+    return jsonify({
+        "results": results,
+        "truncated": truncated,
+        "total_matched": total_matched,
+    })
 
 
 # ── 工具文档 API ──────────────────────────────
@@ -392,6 +460,14 @@ def api_paths_update():
         cfg = paths_config.update_group(group, paths)
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
+
+    # 更新成功后清 skill/cli/mcp 扫描器缓存，让新路径立即生效（无需等 TTL / refresh=1）
+    from scanners import skill_scanner, cli_scanner, mcp_scanner
+    for mod in (skill_scanner, cli_scanner, mcp_scanner):
+        # 防御性 getattr：模块无 _cache_time 属性时跳过
+        if hasattr(mod, "_cache_time"):
+            mod._cache_time = None  # 下次 get_* 即重扫
+
     return jsonify({"success": True, "config": cfg})
 
 
@@ -466,7 +542,7 @@ def api_tool_detail(tool_type: str, name: str):
             result["_usage_cn"] = cn_usage
             # 技能添加插件关联
             if tool_type == "skill":
-                plugin_idx = _build_plugin_index()
+                plugin_idx = _build_plugin_index(force)
                 pname = plugin_idx.get(name)
                 if pname:
                     result["plugin_name"] = pname
@@ -489,9 +565,9 @@ _TYPE_ICONS = {"skills":"📦","mcp":"🔌","cli":"🖥️","hooks":"⚡","plugi
 
 # ── 工具函数 ─────────────────────────────────
 
-def _build_plugin_index() -> dict:
-    """构建技能→插件的反向索引。"""
-    plugins = scan_plugins()
+def _build_plugin_index(force: bool = False) -> dict:
+    """构建技能→插件的反向索引。force 透传给 scan_plugins，随请求的 ?refresh=1 一起强刷。"""
+    plugins = scan_plugins(force)
     idx = {}
     for p in plugins:
         pname = p.get("name", "")
@@ -509,19 +585,38 @@ PID_FILE = Path(__file__).parent / ".launcher.pid"
 
 def run_server(host=None, port=None):
     """启动 Flask 服务：解析端口（0 或 None=自动探测）、写实际地址与 PID、阻塞运行。"""
+    import socket
+
     host = host or config.HOST
     preferred = port if port is not None else config.PORT
     if not preferred:
         preferred = config.find_free_port(host, config.PREFERRED_PORT)
 
-    # 写实际地址与 PID 供外部（launcher.bat / start_server.py）读取
+    # bind 预检：显式端口也验证可用（自动探测模式 find_free_port 已保证）
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind((host, preferred))
+        except OSError:
+            raise SystemExit(
+                f"[CC-Toolbox] 端口 {host}:{preferred} 已被占用，换端口：--port 0 或设 CC_TOOLBOX_PORT"
+            )
+
+    # 预检通过才写 addr/pid 供外部（launcher.bat / start_server.py）读取
     ADDR_FILE.write_text(f"http://{host}:{preferred}\n", encoding="utf-8")
     PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
 
     print("[CC-Toolbox] 启动中...")
     print(f"   浏览器打开 http://{host}:{preferred}")
     print("   按 Ctrl+C 停止服务")
-    app.run(host=host, port=preferred, debug=config.DEBUG)
+    try:
+        app.run(host=host, port=preferred, debug=config.DEBUG)
+    finally:
+        # 正常退出/Ctrl+C/异常均清理状态文件，避免启动器读到死链
+        for f in (ADDR_FILE, PID_FILE):
+            try:
+                f.unlink()
+            except OSError:
+                pass
 
 
 if __name__ == "__main__":

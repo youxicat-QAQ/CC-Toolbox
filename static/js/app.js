@@ -51,7 +51,7 @@ document.addEventListener("DOMContentLoaded", () => {
 let summaryPromise = null;
 function fetchSummary(force = false) {
     if (!summaryPromise || force) {
-        const p = api("/api/summary").catch(e => {
+        const p = api("/api/summary", force).catch(e => {
             if (summaryPromise === p) summaryPromise = null;  // 失败不缓存，允许重试；若已被新请求替换则不误清
             throw e;
         });
@@ -104,7 +104,7 @@ function countUp(el, target, duration = 800) {
 }
 
 // ── 仪表盘 ──
-async function loadDashboard() {
+async function loadDashboard(refresh = false) {
     try {
         const summary = await fetchSummary();
         const byType = summary.by_type || {};
@@ -135,20 +135,20 @@ async function loadDashboard() {
         const totalEl = document.getElementById("totalCount");
         if (totalEl) totalEl.textContent = summary.total;
 
-        // 加载各分类预览
+        // 加载各分类预览（刷新入口透传 refresh=true，绕过服务端 120s 缓存）
         const types = ["skills", "mcp", "cli", "hooks", "plugins", "commands"];
-        types.forEach(t => loadPreview(t));
+        types.forEach(t => loadPreview(t, refresh));
 
     } catch (e) {
         document.querySelectorAll(".stat-count").forEach(el => el.textContent = "!");
     }
 }
 
-async function loadPreview(type) {
+async function loadPreview(type, refresh = false) {
     const container = document.getElementById(`preview-${type}`);
     if (!container) return;
     try {
-        const data = await api(`/api/${TYPE_META[SINGULAR[type]]?.api || type}`);
+        const data = await api(`/api/${TYPE_META[SINGULAR[type]]?.api || type}`, refresh);
         if (!data || data.length === 0) {
             container.innerHTML = '<div class="empty-state">暂无数据</div>';
             return;
@@ -170,11 +170,11 @@ async function loadPreview(type) {
 }
 
 // ── 清单页 ──
-async function loadList(grid) {
+async function loadList(grid, refresh = false) {
     const apiUrl = grid.dataset.api;
     const type = grid.dataset.type;
     try {
-        const data = await api(apiUrl);
+        const data = await api(apiUrl, refresh);
         if (!data || data.length === 0) {
             grid.innerHTML = '<div class="empty-state">暂无数据</div>';
             return;
@@ -249,7 +249,7 @@ function getMeta(item, type) {
 }
 
 // ── 搜索 ──
-async function loadSearch() {
+async function loadSearch(refresh = false) {
     const params = new URLSearchParams(window.location.search);
     let q = params.get("q") || "";
 
@@ -270,23 +270,30 @@ async function loadSearch() {
     }
 
     try {
-        const data = await api(`/api/search?q=${encodeURIComponent(q)}`);
+        const data = await api(`/api/search?q=${encodeURIComponent(q)}`, refresh);
         const container = document.getElementById("searchResults");
-        if (data.length === 0) {
+        // 后端响应为对象 {results, truncated, total_matched}（各类独立配额 + 跨类公平截断）
+        const items = data.results || [];
+        if (items.length === 0) {
             container.innerHTML = `<div class="empty-state">没有找到与"${esc(q)}"相关的工具</div>`;
             return;
         }
 
         // 按类型分组
         const groups = {};
-        data.forEach(item => {
+        items.forEach(item => {
             const t = item.type || "unknown";
             if (!groups[t]) groups[t] = [];
             groups[t].push(item);
         });
 
+        // 截断提示：结果数是 limit 截断后的，真实匹配数用 total_matched（打满配额时为下限估计）
+        const truncatedNote = data.truncated
+            ? `<p><strong>结果过多已截断，共匹配约 ${data.total_matched || items.length} 条，请用更精确关键词</strong></p>`
+            : "";
         let html = `<div class="search-intro">
-            <p>找到 <strong>${data.length}</strong> 个与"${esc(q)}"相关的结果</p>
+            <p>找到 <strong>${items.length}</strong> 个与"${esc(q)}"相关的结果</p>
+            ${truncatedNote}
         </div>`;
         for (const [type, items] of Object.entries(groups)) {
             html += `<div class="search-group">`;
@@ -312,11 +319,11 @@ async function loadSearch() {
 }
 
 // ── 全局工具文档 ──
-async function loadDocs() {
+async function loadDocs(refresh = false) {
     const container = document.getElementById("docsContent");
     const tsEl = document.getElementById("docsTimestamp");
     try {
-        const data = await api("/api/docs");
+        const data = await api("/api/docs", refresh);
         // AI 描述文件条数（0 显示未配置）
         const aiCount = data.ai_desc_count || 0;
         const aiLabel = aiCount > 0 ? ` · AI 描述文件：${aiCount} 条` : " · AI 描述文件：未配置";
@@ -393,16 +400,16 @@ async function refreshDocs(btn) {
     try {
         // 第一步：更新缺失的描述
         const upData = await apiPost("/api/update-descriptions");
-        // 第二步：重新加载文档
-        await loadDocs();
+        // 第二步：重新加载文档（refresh=true 绕过服务端缓存，拿到刚更新的描述）
+        await loadDocs(true);
         // 显示更新统计
         if (upData.updated > 0) {
             if (tsEl) tsEl.textContent += ` · 新增 ${upData.updated} 条中文描述`;
         }
     } catch (e) {
         if (tsEl) tsEl.textContent = "更新失败，请重试";
-        // 尝试加载已有数据
-        try { await loadDocs(); } catch(e2) {}
+        // 尝试加载已有数据（同样强制刷新，避免回退展示旧缓存）
+        try { await loadDocs(true); } catch(e2) {}
     } finally {
         if (btn) {
             btn.textContent = origText || "🔄 更新文档";
@@ -614,11 +621,11 @@ function copyCommand(name, btn) {
 }
 
 // ── 使用统计 ──
-async function loadUsageStats() {
+async function loadUsageStats(refresh = false) {
     const container = document.getElementById("usageStats");
     if (!container) return;
     try {
-        const data = await api("/api/stats/usage");
+        const data = await api("/api/stats/usage", refresh);
         if (!data.top || data.top.length === 0) {
             container.innerHTML = '<div class="usage-empty">暂无统计数据（需要先使用一些工具）</div>';
             return;
@@ -773,19 +780,23 @@ async function exportTools(format, btn) {
 // ── 刷新 ──
 function refreshAll() {
     fetchSummary(true);   // 强制重拉 summary，侧栏计数与仪表盘共用（#34）
-    updateNavCounts();
-    loadDashboard();
-    loadUsageStats();
+    updateNavCounts();    // fetchSummary 不带 force：复用上面刚刷新的 Promise 缓存
+    loadDashboard(true);  // 仪表盘 + 各分类预览全部 ?refresh=1
+    loadUsageStats(true);
 }
 
 function refreshList() {
     const grid = document.getElementById("toolGrid");
-    if (grid) loadList(grid);
+    if (grid) loadList(grid, true);
 }
 
 // ── 工具函数 ──
-async function api(url) {
-    const res = await fetch(url);
+// refresh=true 时拼 ?refresh=1（url 已含 ? 则 &），绕过服务端 120s 扫描缓存
+async function api(url, refresh = false) {
+    const fullUrl = refresh
+        ? (url.includes("?") ? url + "&refresh=1" : url + "?refresh=1")
+        : url;
+    const res = await fetch(fullUrl);
     if (!res.ok) throw new Error("HTTP " + res.status);  // 与 apiPost 错误文案格式统一
     return res.json();
 }
@@ -840,7 +851,7 @@ document.addEventListener("click", (e) => {
         case "refresh-docs": refreshDocs(el); break;
         case "refresh-all": refreshAll(); break;
         case "refresh-list": refreshList(); break;
-        case "refresh-usage": loadUsageStats(); break;
+        case "refresh-usage": loadUsageStats(true); break;
         // el 为分组头自身，父元素才是 docs-group（#37 内联 onclick 改委托）
         case "toggle-collapse": el.parentElement.classList.toggle("docs-collapsed"); break;
         // 路径设置页

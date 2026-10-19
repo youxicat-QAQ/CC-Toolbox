@@ -1,6 +1,7 @@
 """MCP 扫描器 — 读取 ~/.claude.json 和项目 .mcp.json"""
 import json
 import logging
+import os
 import subprocess
 import threading
 import time
@@ -21,15 +22,29 @@ _MAX_PROJECT_PATHS = 30
 
 
 def _read_mcp_config(path: Path) -> Dict:
-    """读取 JSON 中的 mcpServers；文件缺失/损坏返回空 dict，不抛异常。"""
+    """读取 JSON 中的 mcpServers；文件缺失/损坏/结构畸形返回空 dict，不抛异常。
+
+    健壮性：顶层非对象（如裸数组/字符串）或 mcpServers 非 dict（null、字符串）
+    时返回 {}——调用方直接 .items()，若放行会让 MCP 全线 500。
+    全局与项目两个来源都经本函数统一收敛。
+    """
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        return data.get("mcpServers", data.get("mcp_servers", {}))
     except FileNotFoundError:
         return {}
     except Exception as exc:
         logger.warning("MCP 配置解析失败，跳过 %s：%s", path, exc)
         return {}
+    if not isinstance(data, dict):
+        logger.warning("MCP 配置顶层应为对象，跳过 %s：actual=%s",
+                       path, type(data).__name__)
+        return {}
+    servers = data.get("mcpServers", data.get("mcp_servers", {}))
+    if not isinstance(servers, dict):
+        logger.warning("mcpServers 应为对象，跳过 %s：actual=%s",
+                       path, type(servers).__name__)
+        return {}
+    return servers
 
 
 def _enabled_flag(conf: dict) -> bool:
@@ -49,7 +64,14 @@ def _describe_mcp(name: str, conf: dict) -> str:
             return f"URL 型 MCP 服务 — {str(url)[:60]}"
         return "URL 型 MCP 服务"
     cmd = conf.get("command", "")
-    args = conf.get("args", [])
+    args = conf.get("args")
+    # args 畸形（数字/字符串/null）时收敛为空表：直接迭代会 TypeError
+    # 从 scan_all 冒出 → 扫描期全线 500
+    if not isinstance(args, (list, tuple)):
+        args = []
+    else:
+        # 元素也可能非 str（如 5），统一转 str 防 startswith 再炸
+        args = [str(a) for a in args]
     if cmd == "npx" and args:
         pkg = next((a for a in args if not a.startswith("-")), args[0])
         pkg = pkg.replace("-", " ").replace("/", " ").title()
@@ -61,10 +83,15 @@ def _describe_mcp(name: str, conf: dict) -> str:
 
 def _build_server(name: str, conf: dict, scope: str, project_path: str = "") -> dict:
     """由一条 mcpServers 配置构造扫描条目。"""
+    args = conf.get("args", [])
+    # args 畸形（数字/字符串/null）收敛为空表：与 _describe_mcp 同款，
+    # 否则 test_connection 里 [str(a) for a in args] 会 TypeError → 500
+    if not isinstance(args, (list, tuple)):
+        args = []
     item = {
         "name": name,
         "command": conf.get("command", ""),
-        "args": conf.get("args", []),
+        "args": list(args),
         "description": _describe_mcp(name, conf),
         "scope": scope,
         "enabled": _enabled_flag(conf),
@@ -112,12 +139,13 @@ def _read_project_paths(cfg_path: Path) -> List[str]:
 def scan_project() -> List[dict]:
     """扫描项目级 MCP 配置。
 
-    项目路径来源 = ~/.claude.json 的 projects 键解析结果 ∪ paths_config.json
-    的 extra_mcp_project_dirs 自定义目录（字符串去重保序后截断
-    _MAX_PROJECT_PATHS 防爆）。注意：~/.claude.json 缺失/损坏时不再
-    early return，仍继续检查 extra 目录。对每个项目检查 <proj>/.mcp.json
-    与 <proj>/.claude/.mcp.json；单文件解析失败由 _read_mcp_config 记
-    warning 跳过。
+    项目路径来源 = ~/.claude.json 的 projects 键解析结果 + paths_config.json
+    的 extra_mcp_project_dirs 自定义目录。**extra 目录优先**：用户显式配置，
+    去重后全量保留；projects 来源截断到 _MAX_PROJECT_PATHS - len(extra)（最小 0）
+    防爆——否则 projects ≥ 上限时，排在后面的 extra 会被统一截断静默丢弃。
+    注意：~/.claude.json 缺失/损坏时不再 early return，仍继续检查 extra 目录。
+    对每个项目检查 <proj>/.mcp.json 与 <proj>/.claude/.mcp.json；单文件解析
+    失败由 _read_mcp_config 记 warning 跳过。
     """
     servers = []
     cfg_path = config.CLAUDE_MCP_CONFIG.expanduser()
@@ -126,20 +154,32 @@ def scan_project() -> List[dict]:
     projs: List[str] = []
     if cfg_path.exists():
         projs = _read_project_paths(cfg_path)
-    # 合并用户自定义额外目录（get_extra_mcp_dirs 返回 list[Path]）
-    projs.extend(str(p) for p in get_extra_mcp_dirs())
 
-    # 字符串级去重保序，再截断防爆
-    seen_projs: List[str] = []
+    # extra 目录优先（get_extra_mcp_dirs 返回 list[Path]）：单独收集并全量保留
+    extra_dirs: List[str] = []
     seen_set: set = set()
+    for p in get_extra_mcp_dirs():
+        s = str(p)
+        if not s or s in seen_set:
+            continue
+        seen_set.add(s)
+        extra_dirs.append(s)
+
+    # projects 来源字符串级去重保序（含与 extra 的跨源去重）
+    proj_dirs: List[str] = []
     for proj in projs:
         if not proj or proj in seen_set:
             continue
         seen_set.add(proj)
-        seen_projs.append(proj)
+        proj_dirs.append(proj)
+
+    # extra 全量 + projects 用剩余名额截断
+    budget = max(0, _MAX_PROJECT_PATHS - len(extra_dirs))
+    seen_projs = extra_dirs + proj_dirs[:budget]
 
     seen_files = set()
-    for proj in seen_projs[:_MAX_PROJECT_PATHS]:
+    # 无需再截断：extra 全量在前，projects 已按剩余名额截到 budget
+    for proj in seen_projs:
         proj_root = Path(proj).expanduser()
         for mcp_file in (proj_root / ".mcp.json", proj_root / ".claude" / ".mcp.json"):
             key = str(mcp_file)
@@ -216,13 +256,22 @@ def _has_initialize_response(out: str) -> bool:
             and last_obj.get("id") == 1 and "result" in last_obj)
 
 
+def _resolve_executable(cmd: str) -> str:
+    """Windows 下裸命令名经 shutil.which 解析 PATHEXT（npx → npx.cmd）；找不到返回原值。"""
+    import shutil
+    if os.path.sep in cmd or (os.path.altsep and os.path.altsep in cmd):
+        return cmd  # 已是路径
+    found = shutil.which(cmd)
+    return found or cmd
+
+
 def _test_stdio(cmd: str, args: list) -> dict:
     """stdio 型：原样执行命令（不追加 --version），stdin 发 MCP initialize 后读响应。
 
     8s 超时；服务器响应后常不退出——超时后 kill 再收集已产出的 stdout，
     最后一个可解析 JSON 对象为 initialize 响应即算成功。响应统一 {success, output, error}。
     """
-    full_cmd = [cmd] + [str(a) for a in args]
+    full_cmd = [_resolve_executable(cmd)] + [str(a) for a in args]
     try:
         proc = subprocess.Popen(
             full_cmd,

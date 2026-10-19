@@ -62,6 +62,23 @@ def test_api_paths_crud(client, fake_env):
     assert r.get_json()["success"] is False
 
 
+def test_load_filters_non_string_elements_no_500(client, fake_env):
+    """手改配置混入 null/数字/空串时被 _load 过滤，接口仍 200 不全站 500。"""
+    paths_config.PATHS_CONFIG_FILE.write_text(
+        json.dumps({"skill_paths": ["D:/x", None, 5, "", "  "]}),
+        encoding="utf-8",
+    )
+    # 元素级过滤：只保留 strip 后非空的 str
+    cfg = paths_config.get_config()
+    assert cfg["skill_paths"] == ["D:/x"]
+    # 合并路径不因坏元素抛 TypeError（Path(None) 场景）
+    assert any(str(p).replace("\\", "/") == "D:/x"
+               for p in paths_config.get_merged_skill_paths())
+
+    assert client.get("/api/paths").status_code == 200
+    assert client.get("/api/skills?refresh=1").status_code == 200
+
+
 def test_open_rejects_unconfigured(client, fake_env):
     """未配置的路径 → 403（在 startfile 之前）。"""
     r = client.post("/api/paths/open", json={"path": "C:/Windows"})

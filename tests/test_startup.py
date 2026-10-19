@@ -15,7 +15,8 @@ def _free_port() -> int:
 
 
 def test_run_server_writes_addr_and_pid(tmp_path, monkeypatch):
-    """run_server 写 server_addr.txt（含实际端口）与 .launcher.pid（当前进程 PID）。"""
+    """run_server 写 server_addr.txt（含实际端口）与 .launcher.pid（当前进程 PID）；
+    app.run 返回后 finally 清理两文件。"""
     addr_file = tmp_path / "server_addr.txt"
     pid_file = tmp_path / ".launcher.pid"
 
@@ -23,11 +24,15 @@ def test_run_server_writes_addr_and_pid(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "PID_FILE", pid_file)
 
     captured = {}
+    during_run = {}
 
     def fake_run(host=None, port=None, debug=None):
         captured["host"] = host
         captured["port"] = port
         captured["debug"] = debug
+        # app.run 尚未返回时（finally 未执行）：文件应存在且内容正确
+        during_run["addr"] = addr_file.read_text(encoding="utf-8")
+        during_run["pid"] = pid_file.read_text(encoding="utf-8")
 
     monkeypatch.setattr(app_module.app, "run", fake_run)
 
@@ -38,16 +43,18 @@ def test_run_server_writes_addr_and_pid(tmp_path, monkeypatch):
     assert captured["host"] == "127.0.0.1"
     assert captured["port"] == port
 
-    # addr 文件内容包含该端口
-    addr_content = addr_file.read_text(encoding="utf-8")
-    assert f":{port}" in addr_content
+    # app.run 运行期间 addr 文件内容包含该端口，pid 为当前进程 PID
+    assert f":{port}" in during_run["addr"]
+    assert during_run["pid"] == str(os.getpid())
 
-    # pid 文件内容为当前进程 PID
-    assert pid_file.read_text(encoding="utf-8") == str(os.getpid())
+    # run_server 返回后 finally 已清理状态文件
+    assert not addr_file.exists()
+    assert not pid_file.exists()
 
 
 def test_run_server_auto_detects_free_port(tmp_path, monkeypatch):
-    """port=0 / None 时自动探测空闲端口，写入 addr 文件的端口应为非零可用端口。"""
+    """port=0 / None 时自动探测空闲端口，写入 addr 文件的端口应为非零可用端口；
+    app.run 返回后 finally 清理两文件。"""
     addr_file = tmp_path / "server_addr.txt"
     pid_file = tmp_path / ".launcher.pid"
 
@@ -55,9 +62,13 @@ def test_run_server_auto_detects_free_port(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "PID_FILE", pid_file)
 
     captured = {}
+    during_run = {}
 
     def fake_run(host=None, port=None, debug=None):
         captured["port"] = port
+        # app.run 尚未返回时（finally 未执行）：文件应存在且内容正确
+        during_run["addr"] = addr_file.read_text(encoding="utf-8")
+        during_run["pid"] = pid_file.read_text(encoding="utf-8")
 
     monkeypatch.setattr(app_module.app, "run", fake_run)
 
@@ -67,9 +78,13 @@ def test_run_server_auto_detects_free_port(tmp_path, monkeypatch):
     detected_port = captured["port"]
     assert detected_port and detected_port > 0
 
-    addr_content = addr_file.read_text(encoding="utf-8")
-    assert f":{detected_port}" in addr_content
-    assert pid_file.read_text(encoding="utf-8") == str(os.getpid())
+    # app.run 运行期间 addr/pid 文件内容正确
+    assert f":{detected_port}" in during_run["addr"]
+    assert during_run["pid"] == str(os.getpid())
+
+    # run_server 返回后 finally 已清理状态文件
+    assert not addr_file.exists()
+    assert not pid_file.exists()
 
 
 def test_find_free_port_skips_occupied():

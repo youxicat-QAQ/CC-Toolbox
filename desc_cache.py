@@ -454,6 +454,22 @@ def update_descriptions(all_tools: list) -> dict:
                 }
                 updated += 1
 
+        # 回退同步：AI 文件里已删除的条目，清除缓存中对应 source=ai_desc 的记录，
+        # 让描述回退原链——否则该条 desc+usage 齐全会被下面补缺循环 skip，旧 AI 文案永久残留。
+        # ai_data 已经过 _filter_ai_data（只留 dict 条目），值非 dict 的工具名不在 ai_keys：
+        # get_ai_entry 对其本就返回 {}（AI 已不再权威），按条目失效一并回退，不保留失效文案。
+        ai_keys = {
+            _make_key(tname, ttype)
+            for ttype, tools in ai_data.items()
+            if ttype in _AI_TYPE_KEYS and isinstance(tools, dict)
+            for tname in tools
+        }
+        for key in [k for k, v in cache.items()
+                    if isinstance(v, dict) and v.get("source") == "ai_desc"
+                    and k not in ai_keys]:
+            del cache[key]
+            updated += 1
+
         for tool in all_tools:
             ttype = tool.get("_type", "")
             name = tool.get("name", "")

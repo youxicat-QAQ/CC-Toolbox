@@ -39,10 +39,30 @@ def _tasklist(pid: int) -> str:
 
 
 def is_alive(pid: int) -> bool:
+    """判断 PID 是否为本工具的 Python 进程。
+
+    tasklist 输出每行形如 "python.exe  1234 Console  1  100,000 K"，
+    按行 split 后精确比对第一列（进程名），避免 "python" 裸子串误伤
+    PID 复用后的无关进程（如 xxx_python_helper.exe）。
+    """
     try:
-        return "python" in _tasklist(pid)
+        lines = _tasklist(pid).splitlines()
     except OSError:
         return False
+    for line in lines:
+        parts = line.split()
+        if parts and parts[0] in ("python.exe", "pythonw.exe"):
+            return True
+    return False
+
+
+def _cleanup_state_files() -> None:
+    """删除 pid / addr 状态文件（不存在时静默忽略）。"""
+    for f in (PID_FILE, ADDR_FILE):
+        try:
+            f.unlink()
+        except OSError:
+            pass
 
 
 def stop_service() -> None:
@@ -50,17 +70,18 @@ def stop_service() -> None:
         pid = int(PID_FILE.read_text(encoding="utf-8").strip())
     except (OSError, ValueError):
         pid = 0
-    if pid and is_alive(pid):
+    killed = bool(pid) and is_alive(pid)
+    if killed:
         subprocess.run(
             ["taskkill", "/F", "/PID", str(pid)],
             capture_output=True, creationflags=CREATE_NO_WINDOW,
         )
-    for f in (PID_FILE, ADDR_FILE):
-        try:
-            f.unlink()
-        except OSError:
-            pass
-    notify("CC-Toolbox 服务已停止。" if pid else "未发现运行中的服务，已清理状态文件。")
+    _cleanup_state_files()
+    # 文案区分：真停掉服务 vs 仅清理残留状态文件（pid 无效/进程已死的防御分支）
+    notify(
+        "CC-Toolbox 服务已停止。" if killed
+        else "状态文件已清理（未发现运行中的服务）。"
+    )
 
 
 def start_service() -> None:
@@ -211,9 +232,17 @@ def main() -> None:
     if os.name != "nt":
         return
     if PID_FILE.exists():
-        stop_service()
-    else:
-        start_service()
+        # 读 pid 并判活：活着才停止；残留 pid 文件（重启后进程已死）直接清理，
+        # 走启动分支——不停止、不谎报"已停止"，由启动等待窗自然完成
+        try:
+            pid = int(PID_FILE.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            pid = 0
+        if pid and is_alive(pid):
+            stop_service()
+            return
+        _cleanup_state_files()
+    start_service()
 
 
 if __name__ == "__main__":

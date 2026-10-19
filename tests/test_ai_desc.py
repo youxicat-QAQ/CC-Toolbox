@@ -93,3 +93,36 @@ def test_corrupt_ai_file_degrades(fake_env):
     )
     assert desc_cache.get_usage("no-such-tool", "skill") == ""
     assert desc_cache.count_ai_entries() == 0
+
+
+def test_ai_entry_removed_falls_back_on_update(fake_env):
+    """AI 文件删掉条目后再次 update：缓存中 source=ai_desc 记录被清，描述回退原链。"""
+    # 1) AI 文件写 foo → update → 缓存有 foo 且 get 返回 AI 值
+    _write_ai({"skill": {"foo": {"desc": "AI 权威文案", "usage": "AI 用法"}}})
+    result = desc_cache.update_descriptions([])
+    assert result["updated"] >= 1
+    data = json.loads(desc_cache.CACHE_FILE.read_text(encoding="utf-8"))
+    assert data["skill::foo"]["source"] == "ai_desc"
+    assert desc_cache.get_description("foo", "skill") == "AI 权威文案"
+
+    # 2) 从 AI 文件删掉 foo → 再次 update → 缓存无该 key（不再被 skip 永久残留）
+    _write_ai({"skill": {}})
+    desc_cache.update_descriptions([])
+    data = json.loads(desc_cache.CACHE_FILE.read_text(encoding="utf-8"))
+    assert "skill::foo" not in data
+
+    # 3) get_description 回退原链：AI 空 → 缓存无 → known 无 → original 含中文
+    assert desc_cache.get_description("foo", "skill", "原始中文描述") == "原始中文描述"
+    assert desc_cache.get_usage("foo", "skill") == ""
+
+
+def test_ai_entry_kept_survives_update(fake_env):
+    """AI 文件里仍存在的条目不被回退逻辑误删。"""
+    _write_ai({"skill": {"keep": {"desc": "保留的 AI 文案", "usage": "用法"}}})
+    desc_cache.update_descriptions([])
+    _write_ai({"skill": {"keep": {"desc": "更新后的 AI 文案", "usage": "用法"}}})
+    desc_cache.update_descriptions([])
+
+    data = json.loads(desc_cache.CACHE_FILE.read_text(encoding="utf-8"))
+    assert data["skill::keep"]["source"] == "ai_desc"
+    assert data["skill::keep"]["desc"] == "更新后的 AI 文案"

@@ -13,6 +13,7 @@
 - **AI 工具描述**：`ai_descriptions.json` 由 AI 按示例填写，作为最高优先级描述来源
 - **配置导出** JSON / Markdown；使用统计（结构化 `tool_use` 提取，读最新 20 个会话）
 - **端口自动探测**，可与写死 8765 的旧版 / 其他服务共存同时运行
+- **安全防护**：POST 写接口拒绝跨站请求（Origin/Referer 校验）、安全响应头（X-Frame-Options 等）、路径打开白名单、Hook 写入原子替换 + 备份回滚；畸形配置文件（null/非字符串等）自动降级不崩
 
 ## 环境要求
 
@@ -54,7 +55,7 @@ python app.py
    - 读取用户的 skill / CLI 工具安装目录，写入 `paths_config.json`（格式见下文「配置文件」）
    - 询问用户是否需要定制工具描述；如需要，参照 `ai_descriptions.example.json` 将条目写入 `ai_descriptions.json`（`desc` 写 1-3 句功能总结，不要太长）
 5. 启动：`python app.py`（Windows 也可双击 `launcher.bat`）；等待项目目录出现 `server_addr.txt`（最多 20 秒），读取其中 URL，验证 `GET /api/summary` 返回 200
-6. 可选测试：`python -m pytest tests/ -q` 应全部通过（当前 72 个用例）
+6. 可选测试：`python -m pytest tests/ -q` 应全部通过（当前 106 个用例）
 7. 向用户报告访问 URL 与已配置的路径 / 描述数量
 
 ## 主运行流程（给用户与 AI Agent 的系统心智模型）
@@ -127,7 +128,7 @@ Flask 服务（app.py）
 python -m pytest tests/ -q
 ```
 
-当前 72 个用例，覆盖：扫描器（20）、Hook（15）、描述缓存（9）、路径配置（7）、AI 描述（6）、API（6）、导出（4）、启动（3）、隔离（1）、冒烟（1）。
+当前 106 个用例，覆盖：扫描器与坏数据防御（24）、安全 CSRF（15）、Hook（15）、无窗口启动器（9）、描述缓存（9）、API 与搜索（9）、路径配置（8）、AI 描述（8）、导出（4）、启动（3）、隔离与冒烟（2）。
 
 ## 目录结构
 

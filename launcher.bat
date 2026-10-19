@@ -7,8 +7,17 @@ set "VENV_DIR=%~dp0venv"
 set "VENV_PY=%VENV_DIR%\Scripts\python.exe"
 
 :: ---- 1) First-run setup: create venv and install dependencies ----
-if exist "%VENV_PY%" goto STOP_CHECK
-echo [1/3] Creating virtual environment (one-time, may take ~30s)...
+:: Ready check: skip setup only when venv exists AND deps import OK.
+:: File-exist alone is not enough: if the first pip run failed, the venv is
+:: already created and exist-only check would skip install forever.
+if not exist "%VENV_PY%" goto SETUP
+"%VENV_PY%" -c "import flask" >nul 2>nul
+if not errorlevel 1 goto STOP_CHECK
+echo [WARN] venv exists but dependencies missing, reinstalling...
+
+:SETUP
+echo [1/3] Creating virtual environment (skip if exists)...
+if exist "%VENV_PY%" goto DEPS_INSTALL
 python -m venv "%VENV_DIR%"
 if errorlevel 1 (
   echo.
@@ -23,6 +32,7 @@ if not exist "%VENV_PY%" (
   exit /b 1
 )
 
+:DEPS_INSTALL
 echo [2/3] Installing dependencies via Tsinghua mirror (may take 1-3 min)...
 "%VENV_PY%" -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --disable-pip-version-check --no-warn-script-location
 if errorlevel 1 (

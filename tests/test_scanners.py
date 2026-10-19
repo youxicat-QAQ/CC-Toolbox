@@ -46,6 +46,28 @@ def test_mcp_url_type_description_nonempty(fake_env):
     assert "URL 型 MCP 服务" in desc
 
 
+def test_mcp_servers_non_dict_converges_to_empty(client, fake_env):
+    """mcpServers 为 null/字符串时扫描返回空不抛，/api/mcp 仍 200。"""
+    for bad in (None, "oops"):
+        (fake_env.tmp / ".claude.json").write_text(
+            json.dumps({"mcpServers": bad}), encoding="utf-8")
+        assert mcp_scanner.get_mcp_servers(force_refresh=True) == []
+
+    assert client.get("/api/mcp?refresh=1").status_code == 200
+
+
+def test_mcp_non_list_args_no_crash(fake_env):
+    """args 为数字时 _describe_mcp 不迭代炸，且 _build_server 把 args 收敛为 []。"""
+    (fake_env.tmp / ".claude.json").write_text(json.dumps({"mcpServers": {
+        "badargs": {"command": "npx", "args": 5},
+    }}), encoding="utf-8")
+    by = {s["name"]: s for s in mcp_scanner.get_mcp_servers(force_refresh=True)}
+    assert by["badargs"]["description"]
+    assert "npx" in by["badargs"]["description"]
+    # _build_server 不再把数字 args 原样存进条目（否则测试连接 [str(a) for a in args] 抛）
+    assert by["badargs"]["args"] == []
+
+
 def test_mcp_project_paths_from_claude_json(fake_env):
     """从 ~/.claude.json projects 键解析真实项目路径，扫 .mcp.json 两级位置。"""
     # 项目 A：.claude/.mcp.json
@@ -74,6 +96,33 @@ def test_mcp_project_paths_from_claude_json(fake_env):
     assert by["proj-a-mcp"]["project_path"] == str(proj_a)
     assert by["proj-b-mcp"]["scope"] == "project"
     assert by["proj-b-mcp"]["project_path"] == str(proj_b)
+
+
+def test_mcp_extra_dir_priority_over_project_cap(fake_env):
+    """extra_mcp_project_dirs 优先：projects 打满 30 上限时 extra 仍被扫描。"""
+    # 31 个 projects 路径（> _MAX_PROJECT_PATHS=30），全都不带 .mcp.json
+    projects = {}
+    for i in range(31):
+        p = fake_env.tmp / f"proj-{i}"
+        p.mkdir()
+        projects[str(p)] = {}
+    (fake_env.tmp / ".claude.json").write_text(
+        json.dumps({"projects": projects}), encoding="utf-8")
+
+    # 用户显式配置的 extra 目录带一个 .mcp.json
+    extra = fake_env.tmp / "extra-proj"
+    extra.mkdir()
+    (extra / ".mcp.json").write_text(json.dumps({
+        "mcpServers": {"extra-mcp": {"command": "npx", "args": ["x-mcp"]}},
+    }), encoding="utf-8")
+    (fake_env.tmp / "paths_config.json").write_text(
+        json.dumps({"extra_mcp_project_dirs": [str(extra)]}), encoding="utf-8")
+
+    servers = mcp_scanner.scan_project()
+    names = [s["name"] for s in servers]
+    assert "extra-mcp" in names, "extra 目录不得被 projects 截断挤掉"
+    by = {s["name"]: s for s in servers}
+    assert by["extra-mcp"]["project_path"] == str(extra)
 
 
 def test_mcp_test_connection_uniform_error_shape(client, fake_env):
@@ -221,6 +270,37 @@ def test_plugin_bad_entry_skips_and_continues(fake_env):
     assert "good" in names
     assert "noip" not in names
     assert "bad" not in names
+
+
+def test_plugin_non_string_description_normalized(client, fake_env):
+    """plugin.json description 为 null/数字时不抛，收敛为 str；search/docs 不 500。"""
+    plugins_dir = fake_env.base / "plugins"
+    null_dir = plugins_dir / "installed" / "null-desc"
+    null_dir.mkdir(parents=True)
+    (null_dir / "plugin.json").write_text(
+        json.dumps({"name": "null-desc", "version": "1.0.0", "description": None}),
+        encoding="utf-8")
+    num_dir = plugins_dir / "installed" / "num-desc"
+    num_dir.mkdir(parents=True)
+    (num_dir / "plugin.json").write_text(
+        json.dumps({"name": "num-desc", "version": "1.0.0", "description": 42}),
+        encoding="utf-8")
+    (plugins_dir / "installed_plugins.json").write_text(json.dumps({
+        "version": 2,
+        "plugins": {
+            "null-desc@1.0.0": [{"installPath": str(null_dir)}],
+            "num-desc@1.0.0": [{"installPath": str(num_dir)}],
+        },
+    }), encoding="utf-8")
+
+    # 扫描不抛，description 字段收敛为 str（None → ""，42 → "42"）
+    by = {p["name"]: p for p in plugin_scanner.get_plugins(force_refresh=True)}
+    assert by["null-desc"]["description"] == ""
+    assert by["num-desc"]["description"] == "42"
+
+    # 原先 description=null → search 全线 500、42 → docs 全线 500
+    assert client.get("/api/search?q=x&refresh=1").status_code == 200
+    assert client.get("/api/docs?refresh=1").status_code == 200
 
 
 def test_plugin_version_sort_numeric_tuple(fake_env):
