@@ -169,7 +169,7 @@ cc-toolbox/
 
 ## 📄 License
 
-MIT（TODO：正式添加 LICENSE 文件）
+[MIT](LICENSE) © youxicat-QAQ —— 随便用、随便改、商用二次分发均可，保留版权声明即可。
 
 ---
 
