@@ -33,7 +33,7 @@ _lock = threading.Lock()
 # 读侧只拿 _lock，绝不反向获取，故无死锁（_lock 不可重入，不能用它包全程）
 _write_lock = threading.Lock()
 
-# sidecar：被禁用 Hook 的还原档案（与 desc_cache.json 同级，放应用目录而非 ~/.claude）
+# sidecar：被禁用 Hook 的还原档案（放应用根目录而非 ~/.claude，区别于 config/ 下的数据文件）
 SIDECAR_FILE = Path(__file__).parent.parent / "hook_disabled.json"
 
 # 同步（阻塞）事件：Claude 等待 Hook 执行结果再继续主流程；

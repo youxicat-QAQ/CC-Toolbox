@@ -78,9 +78,9 @@ def docs_page():
 
 @app.route("/settings")
 def settings_page():
-    # paths_dir 供模板拼出用户数据文件绝对路径（paths_config.json / ai_descriptions.json）
+    # paths_dir 供模板拼出用户数据文件绝对路径（config/paths_config.json / config/ai_descriptions.json）
     return render_template("settings.html", active="settings",
-                           paths_dir=str(Path(__file__).parent))
+                           paths_dir=str(Path(__file__).parent / "config"))
 
 
 # ── 工具详情页 ──────────────────────────────
@@ -496,9 +496,9 @@ def api_paths_open():
     return jsonify({"success": True})
 
 
-# AI 描述文件的示例与目标路径（reset 路由读写；提为模块常量便于测试隔离）
-AI_DESC_EXAMPLE_FILE = Path(__file__).parent / "ai_descriptions.example.json"
-AI_DESC_FILE = Path(__file__).parent / "ai_descriptions.json"
+# AI 描述文件的示例与目标路径（reset 路由读写；提为模块常量便于测试隔离，均在 config/ 下）
+AI_DESC_EXAMPLE_FILE = Path(__file__).parent / "config" / "ai_descriptions.example.json"
+AI_DESC_FILE = Path(__file__).parent / "config" / "ai_descriptions.json"
 
 
 @app.route("/api/paths/reset-ai-desc", methods=["POST"])
@@ -509,6 +509,8 @@ def api_paths_reset_ai_desc():
         return jsonify({"success": False, "error": "示例文件不存在"}), 404
     if dst.exists():
         return jsonify({"success": False, "error": "ai_descriptions.json 已存在，未覆盖（可手动删除后再恢复）"}), 409
+    # 首次恢复时目标目录可能尚未存在，先确保父目录在
+    dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
     return jsonify({"success": True})
 

@@ -10,7 +10,7 @@
 - **6 类工具清单与详情**：中文描述 / 用法、全局搜索（支持中文）
 - **快速操作**：MCP 测试连接（stdio 型发 JSON-RPC initialize 握手、url 型 HEAD 探测）、Hook 启用禁用（首次自动备份 `settings.json.cc-toolbox.bak` + 原子写 + 失败回滚）、CLI 查看 `--help`、复制调用命令
 - **路径设置页**：自定义 Skill / CLI 扫描目录与 MCP 额外项目目录（增删改查 + 在资源管理器中打开）
-- **AI 工具描述**：`ai_descriptions.json` 由 AI 按示例填写，作为最高优先级描述来源
+- **AI 工具描述**：`config/ai_descriptions.json` 由 AI 按示例填写，作为最高优先级描述来源
 - **配置导出** JSON / Markdown；使用统计（结构化 `tool_use` 提取，读最新 20 个会话）
 - **端口自动探测**，可与写死 8765 的旧版 / 其他服务共存同时运行
 - **安全防护**：POST 写接口拒绝跨站请求（Origin/Referer 校验）、安全响应头（X-Frame-Options 等）、路径打开白名单、Hook 写入原子替换 + 备份回滚；畸形配置文件（null/非字符串等）自动降级不崩
@@ -52,8 +52,8 @@ python app.py
 2. 检查 `python3` / `python` 是否存在且版本 ≥ 3.9；在项目目录执行 `python -m venv venv`
 3. 用 venv 的 pip 安装 `requirements.txt`（优先清华镜像 `-i https://pypi.tuna.tsinghua.edu.cn/simple`，失败用默认源）
 4. 可选配置：
-   - 读取用户的 skill / CLI 工具安装目录，写入 `paths_config.json`（格式见下文「配置文件」）
-   - 询问用户是否需要定制工具描述；如需要，参照 `ai_descriptions.example.json` 将条目写入 `ai_descriptions.json`（`desc` 写 1-3 句功能总结，不要太长）
+   - 读取用户的 skill / CLI 工具安装目录，写入 `config/paths_config.json`（格式见下文「配置文件」）
+   - 询问用户是否需要定制工具描述；如需要，参照 `config/ai_descriptions.example.json` 将条目写入 `config/ai_descriptions.json`（`desc` 写 1-3 句功能总结，不要太长）
 5. 启动：`python app.py`（Windows 也可双击 `launcher.bat`）；等待项目目录出现 `server_addr.txt`（最多 20 秒），读取其中 URL，验证 `GET /api/summary` 返回 200
 6. 可选测试：`python -m pytest tests/ -q` 应全部通过（当前 106 个用例）
 7. 向用户报告访问 URL 与已配置的路径 / 描述数量
@@ -75,7 +75,7 @@ launch_w.pyw（前台接待员，pythonw 无窗口运行）
 Flask 服务（app.py）
    ├─ 探测空闲端口（8765 起，被占自动 +1；可用 CC_TOOLBOX_PORT 指定）
    ├─ 写 server_addr.txt（实际 URL）与 .launcher.pid（进程号）
-   └─ 扫描本机数据源：~/.claude/ 各配置、paths_config.json 自定义目录
+   └─ 扫描本机数据源：~/.claude/ 各配置、config/paths_config.json 自定义目录
    ↓
 浏览器页面（深空数据大屏）
    └─ 页面 JS 通过 /api/* 向服务要数据并渲染
@@ -104,9 +104,9 @@ Flask 服务（app.py）
 
 ## 配置文件
 
-均为项目目录下的 JSON。损坏或缺失时自动回退空配置，不影响启动。
+均为项目 `config/` 目录下的 JSON。损坏或缺失时自动回退空配置，不影响启动。
 
-### paths_config.json — 自定义扫描路径
+### config/paths_config.json — 自定义扫描路径
 
 ```json
 {
@@ -118,9 +118,9 @@ Flask 服务（app.py）
 
 也可在网页「路径设置」页可视化管理（含在资源管理器中打开）。
 
-### ai_descriptions.json — AI 工具描述（最高优先级）
+### config/ai_descriptions.json — AI 工具描述（最高优先级）
 
-格式见 `ai_descriptions.example.json`：顶层按类型（`skill` / `mcp` / `cli` / `hook` / `plugin` / `command`），次层工具名，值为 `{desc, usage 可选}`。填好后即在读取时直接生效；在文档页点「更新描述」会把这些条目强制合并进 `desc_cache.json` 缓存。
+格式见 `config/ai_descriptions.example.json`：顶层按类型（`skill` / `mcp` / `cli` / `hook` / `plugin` / `command`），次层工具名，值为 `{desc, usage 可选}`。填好后即在读取时直接生效；在文档页点「更新描述」会把这些条目强制合并进 `config/desc_cache.json` 缓存。
 
 ## 测试
 
@@ -136,21 +136,24 @@ python -m pytest tests/ -q
 cc-toolbox开源版/
 ├── app.py                     # Flask 主入口：页面路由 + /api/* 接口 + run_server（写 server_addr.txt / .launcher.pid）
 ├── config.py                  # 扫描路径默认值、CC_TOOLBOX_HOST/PORT、find_free_port、缓存 TTL
-├── paths_config.py            # paths_config.json 读写（三键：skill_paths / cli_paths / extra_mcp_project_dirs）
-├── desc_cache.py              # 中文描述缓存引擎 + AI 描述（ai_descriptions.json 最高优先级）
+├── paths_config.py            # config/paths_config.json 读写（三键：skill_paths / cli_paths / extra_mcp_project_dirs）
+├── desc_cache.py              # 中文描述缓存引擎 + AI 描述（config/ai_descriptions.json 最高优先级）
 ├── start_server.py            # 后台启动助手（子进程 + 轮询地址 + 开浏览器）
 ├── launcher.bat               # Windows 命令行风格启动/停止（自动 venv + 依赖 + 开浏览器）
 ├── 一键安装并创建桌面图标.bat  # 首次安装 + 生成桌面 CC-Toolbox 图标（推荐入口）
 ├── launch_w.pyw               # 无窗口启动器（桌面图标目标：等待窗口 + 双击切换启停 + 弹窗反馈）
 ├── create_shortcut.ps1        # 创建桌面快捷方式（指向 pythonw + launch_w.pyw + 新图标）
-├── create_shortcut.ps1        # 生成桌面快捷方式（可选）
-├── generate_icon.py           # 维护者重新生成图标（需 Pillow；运行时不需要）
 ├── requirements.txt           # flask>=3.0、pytest
 ├── requirements-dev.txt       # 开发依赖
-├── ai_descriptions.example.json  # AI 描述示例（随仓库分发）
-├── paths_config.json          # 自定义扫描路径（本机生成，不入库）
-├── ai_descriptions.json       # AI 工具描述（本机生成，不入库）
-├── desc_cache.json            # 描述缓存（本机生成，不入库）
+├── config/                    # ★ 用户数据与配置文件
+│   ├── ai_descriptions.example.json  # AI 描述示例（随仓库分发）
+│   ├── paths_config.json     # 自定义扫描路径（本机生成，不入库）
+│   ├── ai_descriptions.json  # AI 工具描述（本机生成，不入库）
+│   └── desc_cache.json       # 描述缓存（本机生成，不入库）
+├── docs/                      # ★ 文档与维护素材（入库）
+│   ├── 测试文档.md            # 手工测试清单
+│   ├── 应用图标.png            # 图标源图（512×512）
+│   └── generate_icon.py       # 维护者重新生成图标（需 Pillow；运行时不需要）
 ├── server_addr.txt            # 实际访问地址（运行时生成）
 ├── .launcher.pid              # 服务进程 PID（运行时生成）
 ├── scanners/                  # 6 类工具扫描器 + stats_scanner（使用统计）
@@ -169,11 +172,11 @@ cc-toolbox开源版/
 - **双击图标后浏览器很久才打开** → 首次启动需扫描工具目录约 10~20 秒，现在有等待窗口显示进度；二次启动明显更快。超时 25 秒会提示查 server.log
 - **桌面图标显示的还是旧图标** → Windows 按文件路径缓存图标。处理：重新运行 `powershell -ExecutionPolicy Bypass -File create_shortcut.ps1` 重建快捷方式（其 IconLocation 指向 `static\app_icon.ico`，换名文件可绕开缓存）；仍无效则桌面按 F5 刷新，或任务管理器重启 Windows 资源管理器
 - **端口被占 / 想换端口** → 见「端口与多开」
-- **工具描述不准** → 让 AI 填 `ai_descriptions.json`；文档页「更新描述」可合并进缓存
+- **工具描述不准** → 让 AI 填 `config/ai_descriptions.json`；文档页「更新描述」可合并进缓存
 - **paths / ai 文件删了会崩吗** → 不会，自动回退空配置 / 原描述链
-- **换电脑** → 整目录拷走即可（venv 可删重建）；`paths_config.json` 是本机路径，需按需调整
-- **改图标** → 维护者：`pip install pillow` 后 `python generate_icon.py`（运行时不需要 Pillow）；或直接替换 `static/app_icon.ico` / `favicon.ico` / `icon.png`（ico 换文件名可绕 Windows 图标缓存）
-- **数据隐私** → 完全本地运行，不发送任何数据；`desc_cache.json` 等用户数据不入库
+- **换电脑** → 整目录拷走即可（venv 可删重建）；`config/paths_config.json` 是本机路径，需按需调整
+- **改图标** → 维护者：`pip install pillow` 后 `python docs/generate_icon.py`（运行时不需要 Pillow）；或直接替换 `static/app_icon.ico` / `favicon.ico` / `icon.png`（ico 换文件名可绕 Windows 图标缓存）
+- **数据隐私** → 完全本地运行，不发送任何数据；`config/desc_cache.json` 等用户数据不入库
 
 ## License
 

@@ -30,12 +30,21 @@ Debug 模式默认关闭。测试在 `tests/`（72 个用例）；无 lint 配�
 cc-toolbox开源版/
 ├── app.py                  # Flask 主入口 — 页面路由 + /api/* 接口 + run_server（argparse --host/--port）
 ├── config.py               # 配置：扫描路径默认值、CC_TOOLBOX_HOST/PORT、find_free_port、缓存 TTL
-├── paths_config.py         # paths_config.json 读写（自定义扫描路径三键）
+├── paths_config.py         # config/paths_config.json 读写（自定义扫描路径三键）
 ├── desc_cache.py           # 中文描述缓存引擎（AI 描述 + JSON 缓存 + 预定义映射）
 ├── start_server.py         # 独立后台启动助手（轮询 server_addr.txt 后开浏览器）
 ├── launcher.bat            # Windows 一键启动/停止（.launcher.pid 判活）
-├── generate_icon.py        # 维护者重生成图标（需 Pillow；运行时不需要）
-├── ai_descriptions.example.json  # AI 描述示例（随仓库分发；ai_descriptions.json 为本机文件）
+│
+├── config/                 # ★ 用户数据与配置文件
+│   ├── ai_descriptions.example.json  # AI 描述示例（随仓库分发）
+│   ├── paths_config.json     # 自定义扫描路径（本机文件，不入库）
+│   ├── ai_descriptions.json  # AI 工具描述（本机文件，不入库）
+│   └── desc_cache.json       # 中文描述持久化缓存（自动生成，不入库）
+│
+├── docs/                   # ★ 文档与维护素材（入库）
+│   ├── 测试文档.md            # 手工测试清单
+│   ├── 应用图标.png            # 图标源图（512×512）
+│   └── generate_icon.py       # 维护者重生成图标（需 Pillow；运行时不需要）
 │
 ├── scanners/               # 数据扫描器（每个工具类型一个独立模块）
 │   ├── __init__.py          # 统一导出 scan_* 函数
@@ -62,9 +71,6 @@ cc-toolbox开源版/
 │   ├── js/app.js            # 全部前端逻辑（渲染、交互、导出、设置页）
 │   └── icon.png / icon-64.png / favicon.ico
 │
-├── desc_cache.json          # 中文描述持久化缓存（自动生成，不入库）
-├── paths_config.json        # 自定义扫描路径（本机文件，不入库）
-├── ai_descriptions.json     # AI 工具描述（本机文件，不入库）
 ├── server_addr.txt          # 实际访问地址（run_server 生成，供 launcher 读取）
 ├── .launcher.pid            # 服务进程 PID（run_server 生成）
 └── server.log               # start_server.py 的日志文件
@@ -79,7 +85,7 @@ cc-toolbox开源版/
 - 模块级 `_cache` / `_cache_time` 变量
 
 ### 扫描路径
-- **Skills**: `~/.claude/skills/`（config.SKILL_PATHS 默认）+ `paths_config.json` 的 `skill_paths` 自定义（paths_config.get_merged_skill_paths 合并去重）
+- **Skills**: `~/.claude/skills/`（config.SKILL_PATHS 默认）+ `config/paths_config.json` 的 `skill_paths` 自定义（paths_config.get_merged_skill_paths 合并去重）
 - **CLI**: 默认空（config.CLI_PATHS）+ `cli_paths` 自定义 + 系统 PATH 补充；每个目录下还会扫 `node_modules/.bin` 与 `bin` 子目录
 - **MCP**: `~/.claude.json` 的 `projects` 键解析项目路径 ∪ `extra_mcp_project_dirs` 自定义目录，逐项目读 `.mcp.json`
 - **Plugins**: `~/.claude/plugins/installed_plugins.json` + `~/.claude/plugins/cache/`
@@ -88,14 +94,14 @@ cc-toolbox开源版/
 
 ### 中文描述（desc_cache.py）
 - 回退链：**AI 描述文件（最高优先级）→ JSON 缓存 desc 非空 → _KNOWN_DETAILED 预定义 → 原始描述含中文 → 原始描述**
-- `ai_descriptions.json`（与示例文件同格式）由 AI/用户填写，读取时直接生效；`POST /api/update-descriptions` 会把这些条目**强制合并**进缓存（source=ai_desc，即使工具当前未安装也可预填）
+- `config/ai_descriptions.json`（与示例文件同格式）由 AI/用户填写，读取时直接生效；`POST /api/update-descriptions` 会把这些条目**强制合并**进缓存（source=ai_desc，即使工具当前未安装也可预填）
 - 通过 `_description_cn` / `_usage_cn` 字段传递到前端
 - `count_ai_entries()` 统计有效条目数（剔除 _comment 等元键）
 
 ### 路径配置（paths_config.py）
-- 三键结构：`skill_paths` / `cli_paths` / `extra_mcp_project_dirs`，文件固定为项目目录下 `paths_config.json`
-- 缺失/损坏自动按空配置处理；读时不做内存缓存（每次读盘，保证扫描/API 看到最新值）；写为原子替换 + RLock
-- API：`GET /api/paths`、`POST /api/paths`（按组更新）、`POST /api/paths/open`（白名单内路径在资源管理器打开）、`POST /api/paths/reset-ai-desc`（ai_descriptions.json 不存在时从示例复制）
+- 三键结构：`skill_paths` / `cli_paths` / `extra_mcp_project_dirs`，文件固定为项目 `config/` 目录下 `paths_config.json`
+- 缺失/损坏自动按空配置处理；读时不做内存缓存（每次读盘，保证扫描/API 看到最新值）；写为原子替换 + RLock（写前自动 mkdir 父目录）
+- API：`GET /api/paths`、`POST /api/paths`（按组更新）、`POST /api/paths/open`（白名单内路径在资源管理器打开，白名单三个文件均在 config/ 下）、`POST /api/paths/reset-ai-desc`（config/ai_descriptions.json 不存在时从示例复制）
 - 网页入口：`/settings` 路径设置页
 
 ### 启动配置
@@ -135,4 +141,4 @@ GET  /api/paths / POST /api/paths     → 设置页
 - 修改模板/静态文件后需要重启 Flask 服务
 - 所有扫描器都有 120s 内存缓存，`?refresh=1` 参数强制刷新
 - 统计扫描只读按 mtime 最新的 20 个 JSONL 会话文件，排除 subagents/workflows 子目录
-- `paths_config.json` / `ai_descriptions.json` / `desc_cache.json` 均为本机数据文件，删除后自动回退空配置/原链，不影响启动
+- `config/paths_config.json` / `config/ai_descriptions.json` / `config/desc_cache.json` 均为本机数据文件（位于 config/ 目录，删除后自动回退空配置/原链，不影响启动；写入时会自动创建 config/ 目录）

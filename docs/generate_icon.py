@@ -16,7 +16,7 @@
   static/favicon.ico   内含 16/32/48 三档
 
 运行方式（仅维护者需要；应用运行时与 requirements.txt 均不需要 Pillow）：
-  python generate_icon.py
+  python docs/generate_icon.py
   依赖安装：pip install pillow
 """
 
@@ -55,7 +55,10 @@ GLOW_RADIUS = int(S * 0.42)      # 光晕半径
 GLOW_PEAK = 46                   # 光晕峰值 alpha（约 18% × 255）
 SCAN_ALPHA = 36                  # 扫描线整体 alpha（低透明度）
 
-OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+# 脚本位于 docs/ 下，输出仍指向项目根的 static/（向上两级再拼 static）
+OUT_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static"
+)
 
 
 def diagonal_gradient(size, c0, c1):

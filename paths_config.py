@@ -17,8 +17,8 @@ import config
 
 logger = logging.getLogger(__name__)
 
-# 配置文件固定放本项目目录（不放用户家目录，便于随仓库分发默认空配置）
-PATHS_CONFIG_FILE = Path(__file__).parent / "paths_config.json"
+# 配置文件固定放本项目 config/ 目录（不放用户家目录，便于随仓库分发默认空配置）
+PATHS_CONFIG_FILE = Path(__file__).parent / "config" / "paths_config.json"
 
 # 合法的三组配置键
 _FIELDS = ("skill_paths", "cli_paths", "extra_mcp_project_dirs")
@@ -65,6 +65,8 @@ def _load() -> dict:
 def _save(data: dict) -> None:
     """原子写配置文件（tmp + os.replace，参考 desc_cache.py 模式）。"""
     with _lock:
+        # 首次写入时 config/ 目录可能尚未存在，先确保父目录在
+        PATHS_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
         tmp = PATHS_CONFIG_FILE.with_name(PATHS_CONFIG_FILE.name + ".tmp")
         try:
             tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2),
@@ -184,7 +186,7 @@ KNOWN_USER_FILES = {
 
 
 def is_known_user_file(candidate: str) -> bool:
-    """candidate 是否为本项目目录下的已知用户配置文件（精确白名单）。"""
+    """candidate 是否为本项目 config/ 目录下的已知用户配置文件（精确白名单）。"""
     try:
         cand = Path(candidate).expanduser().resolve()
         base = PATHS_CONFIG_FILE.parent.resolve()

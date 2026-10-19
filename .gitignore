@@ -5,7 +5,8 @@ venv/
 server.log
 server_addr.txt
 .launcher.pid
-desc_cache.json
 hook_disabled.json
-paths_config.json
-ai_descriptions.json
+# 本机数据文件统一放 config/（example 仍跟踪）
+config/paths_config.json
+config/ai_descriptions.json
+config/desc_cache.json

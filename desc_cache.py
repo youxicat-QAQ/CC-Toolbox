@@ -12,9 +12,9 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-CACHE_FILE = Path(__file__).parent / "desc_cache.json"
+CACHE_FILE = Path(__file__).parent / "config" / "desc_cache.json"
 # AI 描述文件：由用户/ AI 手工填写，作为描述的最高优先级来源（优先于一切现有链路）
-AI_DESC_FILE = Path(__file__).parent / "ai_descriptions.json"
+AI_DESC_FILE = Path(__file__).parent / "config" / "ai_descriptions.json"
 
 # AI 描述文件允许的工具类型（与 6 类扫描器一致）
 _AI_TYPE_KEYS = ("skill", "mcp", "cli", "hook", "plugin", "command")
@@ -66,6 +66,8 @@ def _load_cache() -> dict:
 
 def _save_cache(cache: dict) -> None:
     with _lock:
+        # 首次写入时 config/ 目录可能尚未存在，先确保父目录在
+        CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         tmp = CACHE_FILE.with_name(CACHE_FILE.name + ".tmp")
         try:
             tmp.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
