@@ -4,6 +4,7 @@ launch_w 是 .pyw 文件，不在标准 import 模块名空间——用 importli
 所有弹窗（notify）与 tasklist/taskkill 子进程均打桩，不触碰真实系统进程。
 """
 import importlib.util
+from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
 import pytest
@@ -12,10 +13,16 @@ BASE = Path(__file__).resolve().parent.parent
 
 
 def _load_launch_w():
-    """按文件路径加载 launch_w.pyw 为名为 launch_w 的模块。"""
-    spec = importlib.util.spec_from_file_location("launch_w", BASE / "launch_w.pyw")
+    """按文件路径加载 launch_w.pyw 为名为 launch_w 的模块。
+
+    .pyw 只在 Windows 是合法源码后缀，Linux/macOS 上 spec_from_file_location
+    识别不了会返回 None——显式指定 SourceFileLoader 保证跨平台可加载。
+    """
+    path = BASE / "launch_w.pyw"
+    loader = SourceFileLoader("launch_w", str(path))
+    spec = importlib.util.spec_from_file_location("launch_w", path, loader=loader)
     mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    loader.exec_module(mod)
     return mod
 
 
