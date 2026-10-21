@@ -135,7 +135,7 @@ python -m pytest tests/ -q   # 107 tests
 
 Covers: scanners & malformed-data defense (24), CSRF security (15), Hooks (15), windowless launcher (9), description cache (9), API & search (9), path config (8), AI descriptions (8), export (4), startup (3), isolation & smoke (2).
 
-Tests run green on a **clean machine with no real `~/.claude/`** — the suite is fully isolated. CI runs them on every push (Linux + Windows, Python 3.11 & 3.13).
+Tests run green on a **clean machine with no real `~/.claude/`** — the suite is fully isolated. CI runs them on every push (Windows, Python 3.11 & 3.13).
 
 Manual test checklist: [`docs/测试文档.md`](docs/测试文档.md) (38 checkable cases incl. old-vs-new comparison).
 

@@ -8,11 +8,13 @@ on:
 
 jobs:
   test:
+    # 本项目是 Windows 桌面工具（启动器/taskkill/os.startfile 等均为 Windows 行为），
+    # 测试套件按 Windows 平台编写，CI 只在 Windows 上跑。
     name: pytest (${{ matrix.os }}, py${{ matrix.python-version }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [windows-latest]
         python-version: ["3.11", "3.13"]
     runs-on: ${{ matrix.os }}
     steps:
