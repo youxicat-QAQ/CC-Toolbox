@@ -5,6 +5,10 @@
 
 `Claude Code` · `MCP 工具管理` · `Skills 可视化` · `本地面板` · `AI 一键部署` · `深空数据大屏`
 
+[English](README.en.md) | **简体中文**
+
+![仪表盘](docs/screenshots/dashboard.png)
+
 ---
 
 ## ✨ 为什么值得用
@@ -30,6 +34,8 @@
 - 🤖 **AI 工具描述**：让 AI 按 `example` 示例为每个工具写 1-3 句中文说明，写入即生效
 - 📤 **配置导出**：JSON / Markdown 一键导出全部工具清单
 - 🔒 **安全与健壮性**：POST 接口 CSRF 校验、安全响应头、Hook 写入自动备份回滚、坏配置自动过滤
+
+![工具详情页](docs/screenshots/detail.png)
 
 ---
 
@@ -128,7 +134,10 @@ python -m pytest tests/ -q   # 107 个用例
 ```
 
 覆盖：扫描器与坏数据防御（24）、安全 CSRF（15）、Hook（15）、无窗口启动器（9）、描述缓存（9）、API 与搜索（9）、路径配置（8）、AI 描述（8）、导出（4）、启动（3）、隔离与冒烟（2）。
+测试在**没有真实 `~/.claude/` 的干净机器上也能全绿**（套件完全隔离）；CI 每次 push 自动跑（Linux + Windows，Python 3.11 & 3.13）。
 手工测试清单见 [`docs/测试文档.md`](docs/测试文档.md)（含新旧对比 38 项可勾选用例）。
+
+![搜索](docs/screenshots/search.png)
 
 ---
 
